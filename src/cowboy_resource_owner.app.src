@@ -1,0 +1,11 @@
+{application, cowboy_resource_owner, [
+  {id, "cowboy_resource_owner"},
+  {description, "simple middleware to control access to resources"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {applications, [
+    kernel,
+    stdlib
+  ]},
+  {env, []}
+]}.
