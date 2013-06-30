@@ -111,13 +111,9 @@ get_token(Req) ->
   end.
 
 handle_token(Token, Env) ->
-  case key(token_handler, Env) of
+  case fast_key:get(token_handler, Env) of
     undefined ->
       undefined;
     TokenHandler ->
       TokenHandler:handle(Token, Env)
   end.
-
-key(Key, List) ->
-  {_, Value} = lists:keyfind(Key, 1, List),
-  Value.
