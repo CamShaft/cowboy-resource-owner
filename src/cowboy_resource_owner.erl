@@ -5,6 +5,7 @@
 -export([owner_id/1]).
 -export([scopes/1]).
 -export([is_authenticated/1]).
+-export([failed_authentication/1]).
 -export([is_authorized/2]).
 
 -record (resource_auth, {
@@ -41,6 +42,7 @@ client_id(Req) ->
   case Info of
     {error, _} = Error -> Error;
     #resource_auth{client_id = ClientID} -> ClientID;
+    undefined -> undefined;
     _ -> {error, invalid_token_info}
   end.
 
@@ -49,6 +51,7 @@ owner_id(Req) ->
   case Info of
     {error, _} = Error -> Error;
     #resource_auth{owner_id = OwnerID} -> OwnerID;
+    undefined -> undefined;
     _ -> {error, invalid_token_info}
   end.
 
@@ -57,20 +60,36 @@ scopes(Req) ->
   case Info of
     {error, _} = Error -> Error;
     #resource_auth{scopes = Scopes} -> Scopes;
+    undefined -> undefined;
     _ -> {error, invalid_token_info}
   end.
 
 is_authenticated(Req) ->
-  case owner_id(Req) of
-    ID when is_binary(ID) orelse is_integer(ID) -> true;
-    _ -> false
+  case client_id(Req) of
+    {error, _} -> false;
+    _ -> true
+  end.
+
+failed_authentication(Req) ->
+  {Info, Req} = cowboy_req:meta(resource_auth, Req),
+  case Info of
+    undefined ->
+      false;
+    {error, _} ->
+      true;
+    _ ->
+      false
   end.
 
 is_authorized(RequiredScope, Req) when is_binary(RequiredScope) ->
   is_authorized([RequiredScope], Req);
 is_authorized(RequiredScopes, Req) when is_list(RequiredScopes) ->
-  OwnerScopes = scopes(Req),
-  check_scopes(RequiredScopes, gb_sets:from_list(OwnerScopes)).
+  case scopes(Req) of
+    OwnerScopes when is_list(OwnerScopes) ->
+      check_scopes(RequiredScopes, gb_sets:from_list(OwnerScopes));
+    _ ->
+      false
+  end.
 
 check_scopes([], _) ->
   true;
