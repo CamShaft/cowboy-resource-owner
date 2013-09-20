@@ -1,6 +1,8 @@
 -module(cowboy_resource_owner).
 
 -export([execute/2]).
+-export([init/1]).
+
 -export([client_id/1]).
 -export([owner_id/1]).
 -export([scopes/1]).
@@ -17,25 +19,38 @@
 }).
 
 execute(Req, Env) ->
-  Value = case get_token(Req) of
+  case fast_key:get(token_handler, Env) of
     undefined ->
       undefined;
-    Token ->
-      case handle_token(Token, Env) of
-        {ClientID, OwnerID, Scopes, Expiration, Other} ->
-          #resource_auth{client_id = ClientID,
-                         owner_id = OwnerID,
-                         scopes = Scopes,
-                         expiration = Expiration,
-                         other = Other};
-        {error, _} = Error ->
-          Error;
-        _ ->
-          {error, invalid_token}
-      end
-  end,
-  Req2 = cowboy_req:set_meta(resource_auth, Value, Req),
-  {ok, Req2, Env}.
+    TokenHandler ->
+      Fun = init(TokenHandler),
+      Fun(Req, Env)
+  end.
+
+init(Handler) when is_function(Handler) ->
+  fun (Req, Env) ->
+    Value = case get_token(Req) of
+      undefined ->
+        undefined;
+      Token ->
+        case Handler(Token, Env) of
+          {ClientID, OwnerID, Scopes, Expiration, Other} ->
+            #resource_auth{client_id = ClientID,
+                           owner_id = OwnerID,
+                           scopes = Scopes,
+                           expiration = Expiration,
+                           other = Other};
+          {error, _} = Error ->
+            Error;
+          _ ->
+            {error, invalid_token}
+        end
+    end,
+    Req2 = cowboy_req:set_meta(resource_auth, Value, Req),
+    {ok, Req2, Env}
+  end;
+init(Handler) ->
+  init(fun Handler:handle/2).
 
 client_id(Req) ->
   {Info, Req} = cowboy_req:meta(resource_auth, Req),
@@ -108,12 +123,4 @@ get_token(Req) ->
       AccessToken;
     _ ->
       undefined
-  end.
-
-handle_token(Token, Env) ->
-  case fast_key:get(token_handler, Env) of
-    undefined ->
-      undefined;
-    TokenHandler ->
-      TokenHandler:handle(Token, Env)
   end.
